@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Life Camp Consecrated — Inscription</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230D0D0D'/%3E%3Ctext x='32' y='43' font-family='Arial, sans-serif' font-weight='700' font-size='26' text-anchor='middle'%3E%3Ctspan fill='%23F5C63E'%3EL%3C/tspan%3E%3Ctspan fill='%23E8691C'%3EC%3C/tspan%3E%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -35,12 +36,12 @@
   .panel{padding:24px;}
   input,select{width:100%;padding:13px;background:#1a1a1a;border:1px solid #333;border-radius:9px;color:#fff;font-size:14px;font-family:inherit;margin-bottom:11px;}
   input:focus,select:focus{outline:none;border-color:var(--orange);}
+  select:invalid, select option[disabled]{color:#777;}
   .row{display:flex;gap:10px;}
   .row>*{flex:1;}
   .fld-lbl{display:block;font-size:12px;color:#888;margin:2px 0 6px 2px;}
   .btn-main{width:100%;padding:15px;background:linear-gradient(90deg,var(--jaune),var(--orange));border:none;border-radius:9px;color:#0D0D0D;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:4px;}
   .btn-main:disabled{opacity:.5;cursor:not-allowed;}
-  .tel-hint{font-size:11px;color:#666;margin-top:-6px;margin-bottom:6px;display:block;}
   .acompte-hint{font-size:11px;color:#666;margin-top:-6px;margin-bottom:11px;display:block;}
 
   .confirm{text-align:center;display:none;}
@@ -55,6 +56,24 @@
 
   .status-conn{text-align:center;font-size:11px;padding:6px;color:#666;}
   .footer{padding:15px;text-align:center;font-size:11px;color:#555;border-top:1px solid #222;}
+
+  /* ---- Toasts ---- */
+  .toast-container{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    z-index:2000; display:flex; flex-direction:column; gap:8px;
+    width:calc(100% - 32px); max-width:420px; pointer-events:none;
+  }
+  .toast{
+    background:#1a1a1a; border:1px solid var(--orange); border-left:4px solid var(--orange);
+    border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.5; color:#f2f2f2;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+    opacity:0; transform:translateY(12px);
+    transition:opacity .25s ease, transform .25s ease;
+    pointer-events:auto;
+  }
+  .toast.show{ opacity:1; transform:translateY(0); }
+  .toast.error{ border-color:var(--rouge); border-left-color:var(--rouge); }
+  .toast.success{ border-color:var(--vert); border-left-color:var(--vert); }
 </style>
 </head>
 <body>
@@ -87,12 +106,19 @@
         <select id="f-mois"></select>
         <select id="f-annee"></select>
       </div>
-      <select id="f-sexe" style="margin-top:11px"><option value="">Sexe</option><option>Homme</option><option>Femme</option></select>
-      <select id="f-designation"><option value="">Désignation</option><option>Bloomeur</option><option>Coach</option></select>
-      <input id="f-tel" placeholder="Numéro WhatsApp (ex: 07 00 00 00 00 ou 0700000000)">
-      <span class="tel-hint">📱 Entrez votre numéro avec le 0 (ex : 0700000000)</span>
+      <select id="f-sexe" style="margin-top:11px">
+        <option value="" disabled selected hidden>Sexe</option>
+        <option>Homme</option>
+        <option>Femme</option>
+      </select>
+      <select id="f-designation">
+        <option value="" disabled selected hidden>Désignation</option>
+        <option>Bloomeur</option>
+        <option>Coach</option>
+      </select>
+      <input id="f-tel" placeholder="Numéro de téléphone">
       <select id="f-brigade">
-        <option value="">Brigade</option>
+        <option value="" disabled selected hidden>Brigade</option>
         <option>PAIX</option>
         <option>JOIE</option>
         <option>GRÂCE</option>
@@ -107,7 +133,7 @@
         <option>FOI</option>
       </select>
       <select id="f-taille">
-        <option value="">Taille de t-shirt</option>
+        <option value="" disabled selected hidden>Taille de t-shirt</option>
         <option>S</option>
         <option>M</option>
         <option>L</option>
@@ -151,6 +177,8 @@
   <div class="footer">Vases d'Honneur · Centre Yotsar Yopougon · (+225) 07 5767 6745</div>
 </div>
 
+<div class="toast-container" id="toastContainer"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = "https://lytqjznkkqrizopsdqyt.supabase.co";
@@ -160,6 +188,20 @@ const TOTAL_PLACES = 100;
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let people = [];
 const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+// ---------- Toasts (remplace les alert() natifs) ----------
+function showToast(message, type='error', duration=4500){
+  const container = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = message;
+  container.appendChild(t);
+  requestAnimationFrame(()=> t.classList.add('show'));
+  setTimeout(()=>{
+    t.classList.remove('show');
+    setTimeout(()=> t.remove(), 300);
+  }, duration);
+}
 
 function normNom(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim().split(' ').sort().join(' ');
@@ -203,11 +245,11 @@ function nomsProches(a,b){
 
 function fillDateSelects(){
   const jour=document.getElementById('f-jour'), mois=document.getElementById('f-mois'), annee=document.getElementById('f-annee');
-  jour.innerHTML='<option value="">Jour</option>';
+  jour.innerHTML='<option value="" disabled selected hidden>Jour</option>';
   for(let j=1;j<=31;j++) jour.innerHTML+='<option value="'+j+'">'+j+'</option>';
-  mois.innerHTML='<option value="">Mois</option>';
+  mois.innerHTML='<option value="" disabled selected hidden>Mois</option>';
   MOIS.forEach((m,i)=> mois.innerHTML+='<option value="'+(i+1)+'">'+m+'</option>');
-  annee.innerHTML='<option value="">Année</option>';
+  annee.innerHTML='<option value="" disabled selected hidden>Année</option>';
   const now=new Date().getFullYear();
   for(let a=now;a>=1930;a--) annee.innerHTML+='<option value="'+a+'">'+a+'</option>';
 }
@@ -250,28 +292,28 @@ window.register = async function(){
   const j=val('f-jour'), m=val('f-mois'), a=val('f-annee');
   const acompteVal = val('f-acompte');
   const acompte = acompteVal ? parseInt(acompteVal,10) : null;
-  if(!nom||!j||!m||!a||!sexe||!tel||!brigade||!taille){ alert('Merci de remplir tous les champs.'); return; }
+  if(!nom||!j||!m||!a||!sexe||!tel||!brigade||!taille){ showToast('Merci de remplir tous les champs.'); return; }
 
   // ✅ Normaliser le téléphone (nettoie les caractères non numériques, garde le 0)
   const telNorm = normTel(tel);
   if(telNorm.length < 10) {
-    alert('Numéro de téléphone invalide. Veuillez entrer un numéro à 10 chiffres avec le 0 (ex: 0700000000)');
+    showToast('Numéro de téléphone invalide. Merci de vérifier le numéro saisi.');
     return;
   }
 
   const age = calcAge(parseInt(j),parseInt(m),parseInt(a));
-  if(age<0 || age>110){ alert('Date de naissance invalide.'); return; }
+  if(age<0 || age>110){ showToast('Date de naissance invalide.'); return; }
   const ddn = a+'-'+String(m).padStart(2,'0')+'-'+String(j).padStart(2,'0');
-  if(remaining()<=0){ alert('Désolé, toutes les places sont prises.'); return; }
+  if(remaining()<=0){ showToast('Désolé, toutes les places sont prises.'); return; }
 
   // ✅ Vérification des doublons avec le numéro normalisé
   if(telNorm && people.some(p=>p.tel_norm===telNorm)){
-    alert("Ce numéro est déjà utilisé pour une inscription.\n\nUne seule inscription par personne. Si c'est une erreur, appelle l'administrateur au (+225) 07 5767 6745.");
+    showToast("Ce numéro est déjà utilisé pour une inscription. Une seule inscription par personne. Si c'est une erreur, appelle l'administrateur au (+225) 07 5767 6745.", 'error', 6000);
     return;
   }
   const jumeau = people.find(p=>nomsProches(p.nom, nom));
   if(jumeau){
-    alert("Une inscription existe déjà à un nom très proche du tien.\n\nPour éviter les doublons, cette inscription est bloquée. Merci d'appeler l'administrateur au (+225) 07 5767 6745 pour confirmer.");
+    showToast("Une inscription existe déjà à un nom très proche du tien. Merci d'appeler l'administrateur au (+225) 07 5767 6745 pour confirmer.", 'error', 6000);
     return;
   }
 
@@ -297,7 +339,7 @@ window.register = async function(){
 
   if(error){
     console.error("Erreur Supabase :", error);
-    alert("Erreur lors de l'inscription : " + error.message);
+    showToast("Erreur lors de l'inscription : " + error.message, 'error', 6000);
     btn.disabled = false;
     btn.textContent = 'Réserver ma place';
     return;
@@ -321,6 +363,7 @@ window.register = async function(){
   render();
   btn.disabled = false;
   btn.textContent = 'Réserver ma place';
+  showToast('Préinscription enregistrée avec succès !', 'success', 3500);
 };
 
 window.resetForm = function(){
