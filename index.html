@@ -30,7 +30,6 @@
   .counter .tot{font-size:22px;color:#666;}
   .bar{height:9px;background:#222;border-radius:5px;margin-top:12px;overflow:hidden;}
   .bar>div{height:100%;background:linear-gradient(90deg,var(--jaune),var(--orange));border-radius:5px;transition:width .4s;}
-  .stats{font-size:12px;color:#888;margin-top:8px;}
   .full-msg{color:var(--rouge);font-weight:600;font-size:14px;margin-top:6px;display:none;}
 
   .panel{padding:24px;}
@@ -93,7 +92,6 @@
     <div class="lbl">PLACES DISPONIBLES</div>
     <div><span class="num" id="remaining">—</span><span class="tot"> / 100</span></div>
     <div class="bar"><div id="bar" style="width:100%"></div></div>
-    <div class="stats" id="stats">Chargement…</div>
     <div class="full-msg" id="fullMsg">Toutes les places sont prises. Inscriptions closes.</div>
   </div>
 
@@ -189,7 +187,6 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let people = [];
 const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
-// ---------- Toasts (remplace les alert() natifs) ----------
 function showToast(message, type='error', duration=4500){
   const container = document.getElementById('toastContainer');
   const t = document.createElement('div');
@@ -207,16 +204,11 @@ function normNom(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim().split(' ').sort().join(' ');
 }
 
-// ✅ tel_norm = numéro nettoyé (chiffres uniquement, on garde le 0 initial)
 function normTel(s){
   let d = String(s || '').replace(/\D/g, '');
   return d;
 }
 
-// ✅ Format international WhatsApp pour un numéro ivoirien à 10 chiffres.
-// Depuis 2021, les numéros CI ont 10 chiffres et le 0 initial fait PARTIE
-// du numéro : on ne le supprime pas, on préfixe simplement par 225.
-// Ex: 0700000000 (10 chiffres) -> 2250700000000 (13 chiffres)
 function waPhone(tel){
   let d = String(tel || '').replace(/\D/g, '');
   if (!d) return '';
@@ -264,14 +256,7 @@ function calcAge(j,m,a){
 
 function refCode(n){ return 'LC' + String(n).padStart(3,'0'); }
 function confirmedCount(){ return people.filter(p=>p.status==='confirmed').length; }
-function pendingCount(){ return people.filter(p=>p.status==='pending').length; }
-
-// ✅ Une inscription "en attente" ne bloque une place que si un acompte
-// a été versé/annoncé. Sans acompte, elle ne compte pas dans les places
-// occupées : ça évite que des personnes s'inscrivent sans jamais payer
-// et empêchent d'autres personnes sérieuses de réserver leur place.
 function pendingWithDepositCount(){ return people.filter(p=>p.status==='pending' && Number(p.acompte) > 0).length; }
-function pendingNoDepositCount(){ return pendingCount() - pendingWithDepositCount(); }
 
 function occupiedCount(){ return confirmedCount() + pendingWithDepositCount(); }
 function remaining(){ return TOTAL_PLACES - occupiedCount(); }
@@ -288,7 +273,6 @@ function render(){
   const rem = remaining();
   document.getElementById('remaining').textContent = rem;
   document.getElementById('bar').style.width = Math.max(0,(rem/TOTAL_PLACES*100)) + '%';
-  document.getElementById('stats').textContent = confirmedCount()+' confirmé'+(confirmedCount()>1?'s':'')+' · '+pendingWithDepositCount()+' en attente (avec acompte)';
   const full = rem<=0;
   document.getElementById('fullMsg').style.display = full ? 'block':'none';
   document.getElementById('btnRegister').disabled = full;
@@ -301,7 +285,6 @@ window.register = async function(){
   const acompte = acompteVal ? parseInt(acompteVal,10) : null;
   if(!nom||!j||!m||!a||!sexe||!tel||!brigade||!taille){ showToast('Merci de remplir tous les champs.'); return; }
 
-  // ✅ Normaliser le téléphone (nettoie les caractères non numériques, garde le 0)
   const telNorm = normTel(tel);
   if(telNorm.length < 10) {
     showToast('Numéro de téléphone invalide. Merci de vérifier le numéro saisi.');
@@ -313,7 +296,6 @@ window.register = async function(){
   const ddn = a+'-'+String(m).padStart(2,'0')+'-'+String(j).padStart(2,'0');
   if(remaining()<=0){ showToast('Désolé, toutes les places sont prises.'); return; }
 
-  // ✅ Vérification des doublons avec le numéro normalisé
   if(telNorm && people.some(p=>p.tel_norm===telNorm)){
     showToast("Ce numéro est déjà utilisé pour une inscription. Une seule inscription par personne. Si c'est une erreur, appelle l'administrateur au (+225) 07 5767 6745.", 'error', 6000);
     return;
