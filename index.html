@@ -266,8 +266,15 @@ function refCode(n){ return 'LC' + String(n).padStart(3,'0'); }
 function confirmedCount(){ return people.filter(p=>p.status==='confirmed').length; }
 function pendingCount(){ return people.filter(p=>p.status==='pending').length; }
 
-// ✅ Les places "pending" comptent aussi
-function remaining(){ return TOTAL_PLACES - (confirmedCount() + pendingCount()); }
+// ✅ Une inscription "en attente" ne bloque une place que si un acompte
+// a été versé/annoncé. Sans acompte, elle ne compte pas dans les places
+// occupées : ça évite que des personnes s'inscrivent sans jamais payer
+// et empêchent d'autres personnes sérieuses de réserver leur place.
+function pendingWithDepositCount(){ return people.filter(p=>p.status==='pending' && Number(p.acompte) > 0).length; }
+function pendingNoDepositCount(){ return pendingCount() - pendingWithDepositCount(); }
+
+function occupiedCount(){ return confirmedCount() + pendingWithDepositCount(); }
+function remaining(){ return TOTAL_PLACES - occupiedCount(); }
 
 async function loadPeople(){
   const { data, error } = await sb.from('inscriptions').select('*').order('created_at',{ascending:true});
@@ -281,7 +288,7 @@ function render(){
   const rem = remaining();
   document.getElementById('remaining').textContent = rem;
   document.getElementById('bar').style.width = Math.max(0,(rem/TOTAL_PLACES*100)) + '%';
-  document.getElementById('stats').textContent = confirmedCount()+' confirmé'+(confirmedCount()>1?'s':'')+' · '+pendingCount()+' en attente';
+  document.getElementById('stats').textContent = confirmedCount()+' confirmé'+(confirmedCount()>1?'s':'')+' · '+pendingWithDepositCount()+' en attente (avec acompte)';
   const full = rem<=0;
   document.getElementById('fullMsg').style.display = full ? 'block':'none';
   document.getElementById('btnRegister').disabled = full;
